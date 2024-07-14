@@ -35,7 +35,7 @@ private:
 
     File(const std::string fullPath, const std::string fileExtension, const std::string content) : metadata_{content.size(), fullPath, fileExtension}, content_{content} {};
 
-    void updateContent(const std::string &newFileContent)
+    void updateContent(const std::string newFileContent)
     {
         content_ = newFileContent;
         metadata_.fileSize_ = newFileContent.size();
@@ -65,39 +65,39 @@ private:
         int foldersCount_;
         int filesCount_;
         std::string fullPath_;
-        Metadata(int foldersCount, int filesCount, std::string fullPath) : foldersCount_{foldersCount}, filesCount_{filesCount}, fullPath_{fullPath} {}
+        Metadata(const int foldersCount, const int filesCount, std::string fullPath) : foldersCount_{foldersCount}, filesCount_{filesCount}, fullPath_{fullPath} {}
     };
     Metadata metadata_;
     Folder *parentFolder_;
     std::unordered_map<std::string, Folder *> folders_;
     std::unordered_map<std::string, File *> files_;
 
-    Folder(std::string fullPath, Folder *parentFolder) : metadata_{0, 0, fullPath}, parentFolder_{parentFolder}
+    Folder(const std::string fullPath, Folder *parentFolder) : metadata_{0, 0, fullPath}, parentFolder_{parentFolder}
     {
         if (parentFolder != nullptr)
             folders_[".."] = parentFolder;
     }
 
-    void addFolder(std::string newFolderName, Folder *newFolderPointer) noexcept
+    void addFolder(const std::string newFolderName, Folder *newFolderPointer) noexcept
     {
         folders_[newFolderName] = newFolderPointer;
         metadata_.foldersCount_++;
     }
 
-    void addFile(std::string newFileName, File *newFilePointer) noexcept
+    void addFile(const std::string newFileName, File *newFilePointer) noexcept
     {
         files_[newFileName] = newFilePointer;
         metadata_.filesCount_++;
     }
 
-    void removeFolder(std::string folderName) noexcept
+    void removeFolder(const std::string folderName) noexcept
     {
         delete folders_[folderName];
         folders_.erase(folderName);
         metadata_.foldersCount_--;
     }
 
-    void removeFile(std::string fileName) noexcept
+    void removeFile(const std::string fileName) noexcept
     {
         delete files_[fileName];
         files_.erase(fileName);
@@ -251,12 +251,12 @@ class FileManager
     /**
      * @brief checks if a file or folder name is valid or not
      * @param name string, the name of file or folder to be validated
-     * @throws std::invalid_argument if name is invalid
+     * @throws std::runtime_error if name is invalid
      */
     static void throwIfNameInvalid(const std::string &name)
     {
         if (name.find('/') != std::string::npos)
-            throw std::invalid_argument("File or folder names can't contain \"/\" in them");
+            throw std::runtime_error("File or folder names can't contain \"/\" in them");
     }
 
 public:
@@ -308,7 +308,7 @@ public:
             // Updating the current instance's currentDir pointer & path
             // only after the destination folder reached without any errors
             currentDirPointer_ = tempDirPointer;
-            currentDirPath_ = destinationFolder;
+            currentDirPath_ = currentDirPointer_->metadata_.fullPath_;
         }
         catch (const std::runtime_error &e)
         {
@@ -329,8 +329,6 @@ public:
     /**
      * @brief create a folder in current directory
      * @param folderName denoting the name of folder to be created
-     * @throws std::invalid_argument if folderName isn't valid
-     * (caught and handled internally)
      * @throws std::runtime_error if folderName already exists
      * (caught and handled internally)
      */
@@ -341,11 +339,15 @@ public:
             throwIfNameInvalid(folderName);
             if (currentDirPointer_->folders_.count(folderName) != 0)
                 throw std::runtime_error("Folder already exists");
-            std::string newFolderPath = currentDirPath_ + "/" + folderName;
+            std::string newFolderPath = currentDirPath_;
+            if (currentDirPath_ == "/")
+                newFolderPath += folderName;
+            else
+                newFolderPath += "/" + folderName;
             Folder *newFolderPointer = new Folder(newFolderPath, currentDirPointer_);
             currentDirPointer_->addFolder(folderName, newFolderPointer);
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while creating folder: " << e.what() << std::endl;
         }
@@ -355,8 +357,6 @@ public:
      * @brief create a file in current directory
      * @param fileName denoting the name of file to be created
      * @param fileContent denoting the content of the file
-     * @throws std::invalid_argument if fileName isn't valid
-     * (caught and handled internally)
      * @throws std::runtime_error if fileName already exists
      * (caught and handled internally)
      */
@@ -367,12 +367,16 @@ public:
             throwIfNameInvalid(fileName);
             if (currentDirPointer_->files_.count(fileName) != 0)
                 throw std::runtime_error("File already exists");
-            std::string newFilePath = currentDirPath_ + "/" + fileName;
+            std::string newFilePath = currentDirPath_;
+            if (currentDirPath_ == "/")
+                newFilePath += fileName;
+            else
+                newFilePath += "/" + fileName;
             std::string extension = getFileExtension(fileName);
             File *newFilePointer = new File(newFilePath, extension, fileContent);
             currentDirPointer_->addFile(fileName, newFilePointer);
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while creating file: " << e.what() << std::endl;
         }
@@ -382,8 +386,6 @@ public:
      * @brief update a file in current directory
      * @param fileName denoting the name of file to be updated
      * @param fileContent denoting the content of the file
-     * @throws std::invalid_argument if fileName isn't valid
-     * (caught and handled internally)
      * @throws std::runtime_error if fileName doesn't exist
      * (caught and handled internally)
      */
@@ -393,10 +395,10 @@ public:
         {
             throwIfNameInvalid(fileName);
             if (currentDirPointer_->files_.count(fileName) == 0)
-                throw std::runtime_error("File doesn't exists");
+                throw std::runtime_error("File doesn't exist");
             currentDirPointer_->files_[fileName]->updateContent(fileContent);
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while updating file: " << e.what() << std::endl;
         }
@@ -412,6 +414,8 @@ public:
 
     /**
      * @brief print contents of the current file
+     * @throws std::runtime_error if fileName doesn't exist
+     * (caught and handled internally)
      */
     void printFileContents(std::string fileName) const noexcept
     {
@@ -419,10 +423,10 @@ public:
         {
             throwIfNameInvalid(fileName);
             if (currentDirPointer_->files_.count(fileName) == 0)
-                throw std::runtime_error("File doesn't exists");
+                throw std::runtime_error("File doesn't exist");
             currentDirPointer_->files_[fileName]->printContents();
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while printing file: " << e.what() << std::endl;
         }
@@ -431,8 +435,6 @@ public:
     /**
      * @brief delete a folder in current directory
      * @param folderName denoting the name of folder to be deleted
-     * @throws std::invalid_argument if folderName isn't valid
-     * (caught and handled internally)
      * @throws std::runtime_error if folderName doesn't exist
      * (caught and handled internally)
      */
@@ -442,10 +444,10 @@ public:
         {
             throwIfNameInvalid(folderName);
             if (currentDirPointer_->folders_.count(folderName) == 0)
-                throw std::runtime_error("Folder doesn't exists");
+                throw std::runtime_error("Folder doesn't exist");
             currentDirPointer_->removeFolder(folderName);
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while deleting folder: " << e.what() << std::endl;
         }
@@ -454,8 +456,6 @@ public:
     /**
      * @brief delete a file in current directory
      * @param folderName denoting the name of file to be deleted
-     * @throws std::invalid_argument if fileName isn't valid
-     * (caught and handled internally)
      * @throws std::runtime_error if fileName doesn't exist
      * (caught and handled internally)
      */
@@ -465,10 +465,10 @@ public:
         {
             throwIfNameInvalid(fileName);
             if (currentDirPointer_->files_.count(fileName) == 0)
-                throw std::runtime_error("File doesn't exists");
+                throw std::runtime_error("File doesn't exist");
             currentDirPointer_->removeFile(fileName);
         }
-        catch (std::invalid_argument &e)
+        catch (std::runtime_error &e)
         {
             std::cerr << "Error while deleting file: " << e.what() << std::endl;
         }
@@ -495,9 +495,9 @@ int main()
     fileManager->createFile("yoyo", "huhu");
     fileManager->printCurrentFolderContents();
 
-    fileManager->printFileContents("yoyo");
+    fileManager->printFileContents("yoyo.txt");
     fileManager->updateFile("yoyo", "huuuuuuuuuuuuuuuuuuuuu");
-    fileManager->printFileContents("yoyo");
+    fileManager->printFileContents("yoyo.txt");
 
     fileManager->printCurrentFolderContents();
     fileManager->deleteFile("yoyo");

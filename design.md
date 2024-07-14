@@ -35,6 +35,7 @@
 - **Constraint**: No 2 folders or files with same name (same named files can be there if they have a different file_extension)
 - Contents:
   - Metadata (type: FolderMetadata)
+  - `parent_folder_address`
   - `unordered_map<folder_names, folder_address> folders`
   - `unordered_map<file_names, file_address> files`
 
